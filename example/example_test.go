@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/8treenet/gcache"
+	"github.com/bmizerany/assert"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 )
@@ -16,12 +17,18 @@ var (
 	cachePlugin gcache.Plugin
 )
 
+type TestRole struct {
+	gorm.Model
+	Name string
+}
+
 type TestUser struct {
 	gorm.Model
 	UserName string `gorm:"size:32"`
 	Password string `gorm:"size:32"`
 	Age      int
 	Status   int
+	Roles    []TestRole `gorm:"many2many:test_user_roles;"`
 }
 
 type TestEmail struct {
@@ -38,6 +45,7 @@ func init() {
 	if e != nil {
 		panic(e)
 	}
+	db.AutoMigrate(&TestRole{})
 	db.AutoMigrate(&TestUser{})
 	db.AutoMigrate(&TestEmail{})
 
@@ -58,14 +66,28 @@ func init() {
 
 func InitData() {
 	cachePlugin.FlushDB()
+	db.Exec("truncate test_user_roles")
+	db.Exec("truncate test_roles")
 	db.Exec("truncate test_users")
 	db.Exec("truncate test_emails")
+
+	roleAdmin := &TestRole{
+		Name: "ADMIN",
+	}
+	db.Save(roleAdmin)
+
+	roleUser := &TestRole{
+		Name: "USER",
+	}
+	db.Save(roleUser)
+
 	for index := 1; index < 21; index++ {
 		user := &TestUser{}
 		user.UserName = fmt.Sprintf("%s_%d", "name", index)
 		user.Password = fmt.Sprintf("%s_%d", "password", index)
 		user.Age = 20 + index
 		user.Status = rand.Intn(3)
+		user.Roles = []TestRole{*roleUser, *roleAdmin}
 		db.Save(user)
 
 		email := &TestEmail{}
@@ -471,4 +493,17 @@ func TestSkipCache(t *testing.T) {
 	email.TypeID = 2101
 	email.TestUserID = 2234
 	cachePlugin.SkipCache().Save(email)
+}
+
+func TestPreload(t *testing.T) {
+	var tc TestUser
+	db.First(&tc, "user_name = ?", "name_1")
+	assert.Equal(t, "name_1", tc.UserName)
+	assert.Equal(t, 0, len(tc.Roles))
+
+	cachePlugin.SkipCache().Preload("Roles").Find(&tc)
+	assert.Equal(t, 2, len(tc.Roles)) // OK
+
+	db.Preload("Roles").Find(&tc)
+	assert.Equal(t, 2, len(tc.Roles)) // FAIL
 }
