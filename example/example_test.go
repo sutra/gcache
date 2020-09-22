@@ -502,8 +502,27 @@ func TestPreload(t *testing.T) {
 	assert.Equal(t, 0, len(tc.Roles))
 
 	cachePlugin.SkipCache().Preload("Roles").Find(&tc)
-	assert.Equal(t, 2, len(tc.Roles)) // OK
+	assert.Equal(t, 2, len(tc.Roles))
 
 	db.Preload("Roles").Find(&tc)
-	assert.Equal(t, 2, len(tc.Roles)) // FAIL
+	assert.Equal(t, 2, len(tc.Roles))
+}
+
+func TestAssociation(t *testing.T) {
+	var tc TestUser
+	db.First(&tc, "user_name = ?", "name_1")
+	assert.Equal(t, "name_1", tc.UserName)
+	assert.Equal(t, 0, len(tc.Roles))
+
+	cachePlugin.SkipCache().Preload("Roles").Find(&tc)
+	assert.Equal(t, 2, len(tc.Roles))
+
+	db.Preload("Roles").Find(&tc)
+	assert.Equal(t, 2, len(tc.Roles))
+
+	var adminRole TestRole
+	db.Model(&adminRole).Where("name = ?", "ADMIN").First(&adminRole)
+	assert.Equal(t, "ADMIN", adminRole.Name)
+
+	db.Association("Roles") // panic: runtime error: invalid memory address or nil pointer dereference
 }
