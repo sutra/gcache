@@ -524,5 +524,5 @@ func TestAssociation(t *testing.T) {
 	db.Model(&adminRole).Where("name = ?", "ADMIN").First(&adminRole)
 	assert.Equal(t, "ADMIN", adminRole.Name)
 
-	db.Association("Roles") // panic: runtime error: invalid memory address or nil pointer dereference
+	db.Model(tc).Association("Roles").Delete(adminRole) // panic: reflect.Value.Addr of unaddressable value
 }
